@@ -43,9 +43,11 @@ processes=9
 stats=127.0.0.1:9191
 safe-pidfile=/tmp/uwsgi.pid
 
-die-on-term = true
-vacuum = true
+die-on-term = true  # exit instead of brutal reload on SIGTERM
+vacuum = true  # try to remove all of the generated file/sockets
 master = true
+# Graceful shutdown on SIGTERM, see https://github.com/tiangolo/uwsgi-nginx-docker/pull/30
+hook-master-start = unix_signal:15 gracefully_kill_them_all
 
 # Uwsgi gevent asynchronous/non-blocking modes, threads option not work with gevent
 gevent = 100

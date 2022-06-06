@@ -31,16 +31,39 @@ func main() {
 
 ```
 
+## Build and run in windows
+
+```
+go build main.go && ./main.exe
+```
+
+## test
+
+```
+go test
+```
+
+## some problem for tidy with version 1.17
+
+```
+go mod tidy -go=1.17
+```
+
 ## component
 
 1. framwork
     * fiber
     * gin
+    * Echo
+    * go-zero
 2. ORM
     * GORM
     * Sqlx
+    * xorm
+    * golang-migrate/migrate
 3. websocket
     * gorilla/websocket
+    * gobwas
     * fiber
 4. schedule
     * cron
@@ -53,6 +76,7 @@ func main() {
     * confluentinc/confluent-kafka-go (kafka)
     * segmentio/kafka-go (kafka)
     * NATS
+    * hibiken/asynq
 6. driver
     * go-redis (redis client)
     * gomodule/redigo (redis client)
@@ -65,6 +89,14 @@ func main() {
     * os
     * godotenv
     * viper
+9. DI (dependency injection)
+    * wire
+10. log
+    * logrus
+    * zap
+    * zerolog
+11. template
+    * pagoda (base Echo)
 
 ### framwork benchmark
 
@@ -72,7 +104,24 @@ func main() {
 * https://blog.golang.org/using-go-modules
 * https://dev.to/techschoolguru/load-config-from-file-environment-variables-in-golang-with-viper-2j2d
 
-### dotenv
+### Gin concept
+
+project components
+
+* dotenv(godotenv)
+* custom logger(log, gin log)
+* custom recovery
+* gracefully shutdown
+* db connection
+* redis connection
+
+request middleware flow
+
+```
+Request -> Route Parser -> Middleware -> Route Handler -> Middleware -> Response
+```
+
+### dotenv (viper)
 
 ```
 package configs
@@ -126,6 +175,79 @@ func LoadConfig(path string) (config Config, err error) {
 
 ```
 
+### dotenv (godotenv)
+
+基本用法
+
+```
+	err := godotenv.Load()
+	if err != nil {
+		panic(err)
+	}
+	gin_mode := os.Getenv("GIN_MODE")
+```
+
+Config 用法 config.go
+
+```
+type Config struct {
+	Env       string
+	GinMode   string
+	Port      string
+	SecretKey string
+	DB        *DBConfig
+	RedisDB   *RedisConfig
+}
+
+type DBConfig struct {
+	Host     string
+	Port     string
+	Username string
+	Password string
+	Name     string
+	Charset  string
+}
+
+type RedisConfig struct {
+	Host     string
+	Port     string
+	Password string
+}
+
+var configSet *Config
+
+func LoadEnv() {
+	err := godotenv.Load()
+	if err != nil {
+		panic(err)
+	}
+	configSet = &Config{
+		Env:       os.Getenv("ENV"),
+		GinMode:   os.Getenv("GIN_MODE"),
+		Port:      os.Getenv("PORT"),
+		SecretKey: os.Getenv("SECRET_KEY"),
+		DB: &DBConfig{
+			Host:     os.Getenv("DB_HOST"),
+			Port:     os.Getenv("DB_PORT"),
+			Username: os.Getenv("DB_USERNAME"),
+			Password: os.Getenv("DB_PASSWORD"),
+			Name:     os.Getenv("DB_NAME"),
+			Charset:  "utf8mb4",
+		},
+		RedisDB: &RedisConfig{
+			Host:     os.Getenv("REDIS_HOST"),
+			Port:     os.Getenv("REDIS_PORT"),
+			Password: os.Getenv("REDIS_PASSWORD"),
+		},
+	}
+}
+
+func GetConfig() *Config {
+	return configSet
+}
+```
+
+
 ### gorm db connection
 
 ```
@@ -170,6 +292,101 @@ func ConnectDataBase() {
 }
 
 ```
+
+### golang-migrate/migrate
+
+* [download binary file](https://github.com/golang-migrate/migrate/releases)
+
+create migration file
+
+```
+./migrate create -ext sql -dir db/migrations -seq create_users
+```
+
+up file (DDL by database)
+
+```
+BEGIN;
+CREATE TABLE IF NOT EXISTS users (
+    id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+    username VARCHAR(255) NOT NULL,
+    account VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT current_timestamp(),
+    updated_at DATETIME NOT NULL DEFAULT current_timestamp(),
+    PRIMARY KEY (id),
+    UNIQUE INDEX `account` (`account`),
+);
+COMMIT;
+```
+
+down file (DDL)
+
+```
+DROP TABLE IF EXISTS users;
+```
+
+mysql connection
+
+```
+mysql://user:password@host:port/dbname?sslmode=disable
+```
+
+migrate up
+
+```
+migrate -database ${DATABASE_URL} -path db/migrations up 1
+```
+
+migrate down
+
+```
+migrate -database ${DATABASE_URL} -path db/migrations down 1
+```
+
+### bcrypt for password
+
+```
+package crypto
+
+import (
+	"golang.org/x/crypto/bcrypt"
+)
+
+// 暗号(Hash)化
+func PasswordEncrypt(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(hash), err
+}
+
+// 暗号(Hash)と入力された平パスワードの比較
+func CompareHashAndPassword(hash, password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+}
+
+```
+
+### Gin validation
+
+use point to bind data must have key and null string
+使用指標宣告取得資料, 必須有Key且可為空字串
+
+```
+type MyModel struct {
+    MyField *int `json:"my_field" binding:"required"`
+}
+
+func MyFunction(c *gin.Context) {
+    var myModel MyModel;
+    err := c.shouldBind(&myModel);
+
+    // the rest of the logic 
+    // - if you do want to use the int value, you have to de-reference it, like so:
+
+    var myIntValue = *myModel.MyField
+}
+```
+
 
 ## Reference
 
